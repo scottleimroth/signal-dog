@@ -57,7 +57,9 @@ TOOL_DESCRIPTION = (
     "the household sound listener, raised, from its own numbers log, with time, pitch, whether the owner marked each "
     "right or wrong, and whether it is listening now. Use it when the user asks what the house sounded like or what "
     "was heard while they were out. Read-only. It never reads audio and makes no network call. An empty list is not "
-    "proof the house was quiet: the answer says whether the listener was on.")
+    "proof the house was quiet: the answer says whether the listener was on. Search words: microphone, sound, sounds, "
+    "noise, heard, hear, house, home, door, doorbell, knock, beep, alarm, smoke alarm, timer, listener, alerts, "
+    "history, recent, away, out, while.")
 TOOL_SCHEMA = {
     "name": TOOL_NAME,
     "description": TOOL_DESCRIPTION,

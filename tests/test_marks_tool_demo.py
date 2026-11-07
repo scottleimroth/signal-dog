@@ -305,7 +305,10 @@ class ToolTests(Base):
         self.assertEqual(toolset, "signal_dog")
         text = (_pkg.ROOT / "plugin.yaml").read_text(encoding="utf-8")
         self.assertIn("provides_tools:\n- " + signal_dog.TOOL_NAME, text)
-        self.assertLess(len(schema["description"]), 600)
+        self.assertLess(len(schema["description"]), 800)
+        # Hermes finds a deferred tool by keywords that appear in its text, so the plain words people use must be there
+        for word in ("microphone", "sounds", "heard", "door", "knock", "beep", "alarm", "smoke alarm", "timer", "alerts", "doorbell"):
+            self.assertIn(word, schema["description"].lower())
 
     def test_lists_recent_alerts_newest_first_with_times_kinds_pitches_and_marks(self):
         self.put([self.knock(7200), self.beep(3600), self.beep(1800, hz=2920, pulses=0, seconds=4.0, busy=False)])

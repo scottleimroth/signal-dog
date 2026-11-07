@@ -179,6 +179,8 @@ tuned on, so it shows a direction, not a promise. `docs/DETECTOR-DESIGN.md` has 
 |---|---|
 | House recordings: 3 visits to the door, 12 sets of knocks (tuned on) | every visit alerted; 9 of the 12 sets |
 | House recordings: fridge door alarm, phone timer, a smoke-alarm sound played from a phone (tuned on) | 3 of 3 alerted |
+| A public-domain recording of a real smoke alarm (Wikimedia Commons, 37 s) | alerted 4.5 s after the alarm began, and again as it kept sounding |
+| The standard smoke-alarm pattern (three half-second beeps, a pause), made by code and mixed into room noise at four loudnesses | found in 2.3 to 2.7 s each time |
 | 40 public door-knock recordings (ESC-50) mixed into room noise, loudest thud 25 dB over the room | 38 alerted (35 at 30 dB, 28 at 20 dB) |
 | The same test with 240 recordings of other sounds (footsteps, typing, mouse clicks, clock ticks, a creaking door, a can opening), each as loud as the knocks | 48 raised a knock alert |
 | The same test with 40 public snoring recordings | 31 raised a knock alert |
@@ -197,7 +199,7 @@ https://github.com/karolpiczak/ESC-50) is not in this repository. The house reco
   "something thumped three times", not "someone is at the door". Footsteps, typing, mouse clicks, a creaking
   door and snoring can all do it when they are loud and close (see the table). On an ordinary evening at home, awake
   and with no visitors, it raised 82 knock alerts in 133 minutes, every one of them false. In a room busy with thumps it waits
-  for a second set of knocks and says the room was busy, which cut these alerts by a third on the saved recordings but does not end them; while
+  for a second set of knocks and says the room was busy, which cut these alerts by a third on the saved recordings and by one in seven on a fresh 23 minutes, but does not end them; while
   you cook or tidy, `/signaldog knocks off` pauses knock messages and keeps the beeps.
 - With the television on, only the three-thud route works, and a knock has to be loud (at least 20 dB above
   the room). Soft knocks and two-knock knocks are missed then, and for up to two minutes after the television goes
@@ -211,7 +213,10 @@ https://github.com/karolpiczak/ESC-50) is not in this repository. The house reco
   clock-tick recordings raised a beep alert.
 - Beep false alerts with the television on were about 4 an hour in the recordings above (the target was 1).
   Beep alerts raised in a noisy room say so.
-- It has been tested on a smoke alarm sound played from a phone, not on a real smoke alarm.
+- It has been tested on one recording of a real smoke alarm, a smoke-alarm sound played from a phone and the standard pattern made by code. It has not
+  been tested on an alarm sounding in a house, or in a noisy room. A continuing alarm raises a new message about every 10 seconds.
+- Beeps shorter than about 0.16 seconds are mostly missed (some carbon-monoxide alarms use 0.1 s beeps). A made-up pattern of four 0.1 s beeps was found
+  only in a very quiet room.
 - It listens only where the agent runs. It cannot hear a different room or house.
 - A gateway restart stops the listener and empties the missed alerts. Run `/signaldog on`
   again after one.

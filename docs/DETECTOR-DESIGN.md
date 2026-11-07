@@ -189,6 +189,22 @@ listener and its `ffmpeg`) is in the numbers log; `tools/live_run.py` makes such
 Saved television sittings (7, 1.3 hours in all) under the final rules: 5 false beep alerts and 1
 false knock alert.
 
+## Smoke alarms and short beeps
+
+A public-domain recording of a real smoke alarm (Wikimedia Commons, "Smoke alarm.ogg", 37 s, the alarm sounding from 2.8 s to
+30.5 s) raised beep alerts at 7.3 s, 17.3 s and 27.4 s, at reported pitches that differ (the strongest band moves), so a
+continuing alarm posts a new message about every 10 seconds (the merge time after a repeat alert). No knock alert.
+
+The standard smoke-alarm pattern (ISO 8201 T3: three 0.5 s beeps, 0.5 s gaps, a 1.5 s pause, repeating; 2.9 or 3.1 kHz with a
+weaker second harmonic), made by code and mixed as audio into the steady room noise at four loudnesses, was alerted 2.3 to 2.7 s
+after it began in all eight runs. A four-beep pattern with 0.1 s beeps and 0.1 s gaps (as some carbon-monoxide alarms use) was
+found only in the quietest runs: a pulse must hold 160 ms to count, so beeps this short are mostly missed by design.
+
+## Held-out check of the knock rule
+
+The second-set-in-a-thumping-room rule was written from earlier logs. On a fresh 23 minutes at home with nobody at the door
+(954 thuds, so every knock alert was false), the rule before it alerted 26 times and the kept rule 22.
+
 ## What the numbers do not show
 
 - These are short clips cut around events, not hours of ordinary life. False alerts per
