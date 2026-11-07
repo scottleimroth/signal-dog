@@ -1,0 +1,43 @@
+name: signal-dog
+version: 0.1.0
+description: Listens through the microphone for household sounds (a door knock, an
+  appliance beeping, a smoke alarm) and sends you a chat message. Off until you turn
+  it on with /signaldog on. Needs ffmpeg. Not a certified smoke alarm.
+author: Signal Dog contributors
+manifest_version: 2
+api_version: 1
+license: MIT
+requires_hermes: '>=0.23.0'
+tags:
+- accessibility
+- audio
+- notifications
+provides_tools:
+- signal_dog_recent_alerts
+provides_hooks:
+- pre_llm_call
+config_schema:
+  source:
+    type: str
+    default: default
+    label: Microphone
+    description: The PulseAudio source ffmpeg listens to. "default" is the system default microphone.
+  owner_ids:
+    type: list
+    default: []
+    label: Owner user ids
+    description: Messaging-platform user ids allowed to use /signaldog. Empty means trust the first person who switches it
+      on from a direct message. In a group chat it will not switch on unless the sender is listed here. On your own
+      machine (CLI, TUI, Desktop) anyone at it is the owner.
+  recycle_minutes:
+    type: int
+    default: 10
+    label: Replace the microphone reader
+    description: Minutes between replacing the ffmpeg process that reads the microphone. A live capture slowly uses more
+      processor the longer one process runs; the new one starts beside the old and takes over without a gap.
+      0 turns it off.
+  heartbeat_hours:
+    type: int
+    default: 24
+    label: Still-listening message
+    description: Hours between "still listening" messages, so a dead listener is never silent. 0 turns them off.
