@@ -12,6 +12,8 @@ with a microphone. It is built by a deaf developer, for use at home.
 
 Not a certified smoke alarm. Do not rely on it for safety.
 
+![The demo: a made-up knock and beeps, the sound as Signal Dog sees it, and the two chat messages it posts](docs/demo-scene.png)
+
 ## What you see
 
 In the chat where you switched it on:
@@ -189,6 +191,8 @@ tuned on, so it shows a direction, not a promise. `docs/DETECTOR-DESIGN.md` has 
 | An ordinary evening, television off, 35 minutes (tuned on) | 14 knock alerts nobody asked for, no beep alerts |
 | A quiet house overnight, television off, 8 hours (not tuned on) | 7 soft knock alerts (snoring is the likely cause) and 1 beep alert, cause unknown |
 | Running all night with its reader swapped every 10 minutes | 8.5 hours, 8 to 9 percent of one processor core, no crash |
+
+![What was measured, and what is not perfect yet](docs/measured.png)
 
 The public-recording test is `tools/public_clips.py`; the ESC-50 set (Piczak 2015,
 https://github.com/karolpiczak/ESC-50) is not in this repository. The house recordings are not either.
