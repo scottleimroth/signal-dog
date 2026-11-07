@@ -202,8 +202,8 @@ found only in the quietest runs: a pulse must hold 160 ms to count, so beeps thi
 
 ## Held-out check of the knock rule
 
-The second-set-in-a-thumping-room rule was written from earlier logs. On a fresh 23 minutes at home with nobody at the door
-(954 thuds, so every knock alert was false), the rule before it alerted 26 times and the kept rule 22.
+The second-set-in-a-thumping-room rule was written from earlier logs. On a fresh 32 minutes at home with nobody at the door
+(1,287 thuds, so every knock alert was false), the rule before it alerted 33 times and the kept rule 25.
 
 ## What the numbers do not show
 

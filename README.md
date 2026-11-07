@@ -199,7 +199,7 @@ https://github.com/karolpiczak/ESC-50) is not in this repository. The house reco
   "something thumped three times", not "someone is at the door". Footsteps, typing, mouse clicks, a creaking
   door and snoring can all do it when they are loud and close (see the table). On an ordinary evening at home, awake
   and with no visitors, it raised 82 knock alerts in 133 minutes, every one of them false. In a room busy with thumps it waits
-  for a second set of knocks and says the room was busy, which cut these alerts by a third on the saved recordings and by one in seven on a fresh 23 minutes, but does not end them; while
+  for a second set of knocks and says the room was busy, which cut these alerts by a third on the saved recordings and by about a quarter on a fresh 32 minutes, but does not end them; while
   you cook or tidy, `/signaldog knocks off` pauses knock messages and keeps the beeps.
 - With the television on, only the three-thud route works, and a knock has to be loud (at least 20 dB above
   the room). Soft knocks and two-knock knocks are missed then, and for up to two minutes after the television goes
