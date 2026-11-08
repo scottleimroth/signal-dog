@@ -54,11 +54,18 @@ one. It is different in three ways:
 
 ## Use
 
-For live listening it needs `ffmpeg` built with PulseAudio support, and a microphone that
-PulseAudio can see (Linux, or Windows with WSL2). A static `ffmpeg` build without
-PulseAudio will start but cannot open the microphone; the plugin then says so in
-`/signaldog status`. Other systems, and machines with no microphone, can only run
-`/signaldog demo`, which needs `ffmpeg` but no microphone.
+For live listening it needs `ffmpeg` and a microphone:
+
+- **Linux and WSL2:** through PulseAudio. A static `ffmpeg` build without PulseAudio will start but cannot open the
+  microphone; the plugin then says so in `/signaldog status`.
+- **Windows (native):** through DirectShow. `default` is the first microphone `ffmpeg` lists; to choose another, set
+  `source` to a name from `ffmpeg -list_devices true -f dshow -i dummy`. Tested live on a Windows PC's webcam microphone,
+  including the reader swap and a clean stop.
+- **macOS: not yet.** On a test Mac the microphone reached Signal Dog with most of the sound missing, so on a Mac
+  `/signaldog on` says so and does nothing. `/signaldog demo` and the agent's tool work there, and the tests pass on macOS.
+
+Machines with no microphone can run `/signaldog demo`, which needs `ffmpeg` but no microphone. The tests run on
+Linux, macOS and Windows (`.github/workflows/tests.yml`).
 
 Put this folder at `$HERMES_HOME/plugins/signal-dog` and enable it:
 

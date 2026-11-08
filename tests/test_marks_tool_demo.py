@@ -266,6 +266,23 @@ class MarkTests(Base):
             self.assertIn(word, text)
 
 
+class MacTests(Base):
+    def test_on_a_mac_live_listening_says_it_is_not_ready_and_starts_nothing(self):
+        started = []
+        with mock.patch.object(signal_dog.platform_mod, "system", return_value="Darwin"),                 mock.patch.object(signal_dog, "Listener", lambda *a, **k: started.append(a)):
+            reply = self.cmd("on")
+        self.assertIn("not ready yet", reply)
+        self.assertIn("/signaldog demo works", reply)
+        self.assertEqual(started, [])
+        self.assertIsNone(self.p.listener)
+
+    def test_on_a_mac_a_recording_can_still_be_played_through_it(self):
+        with mock.patch.object(signal_dog.platform_mod, "system", return_value="Darwin"),                 mock.patch.object(signal_dog, "Listener", StubListener):
+            reply = self.cmd("on file:/recordings/knock.wav")
+        self.assertNotIn("not ready yet", reply)
+        self.assertIsNotNone(self.p.listener)
+
+
 class KnockPauseTests(Base):
     def queued(self):
         out = []

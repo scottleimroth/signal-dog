@@ -21,6 +21,7 @@ import contextvars
 import json
 import logging
 import os
+import platform as platform_mod
 import queue
 import shutil
 import tempfile
@@ -47,6 +48,9 @@ COMMANDS = ("on", "off", "status", "test", "wrong", "right", "demo", "knocks")
 USAGE = "Usage: /signaldog on [source] | off | status | test | wrong [note] | right [note] | demo | knocks on|off"
 MARK_HOURS = 24                  # /signaldog wrong and right only reach back this far
 DEMO_LABEL = "DEMO (not a real sound): "
+MAC_NOT_READY = ("Live listening on a Mac is not ready yet: on a test Mac the microphone reached Signal Dog with most of the "
+                 "sound missing, so it would miss sounds while looking switched on. /signaldog demo works here, and so does "
+                 "asking the agent what Signal Dog heard. Live listening works on Linux, WSL2 and Windows.")
 DEMO_MARK_PAUSE_S = 600.0        # after a demo, /signaldog wrong and right refuse for this long (they would hit an older real alert)
 DEMO_GRACE_S = 40.0              # a demo that has not finished this long after its recording ends is stopped
 TOOL_NAME = "signal_dog_recent_alerts"
@@ -363,6 +367,10 @@ class _Plugin:
         return "Test message sent." if ok else "Test message failed: %s" % err
 
     def _on(self, source, platform, uid, session_key):
+        if platform_mod.system() == "Darwin" and not (source or "").startswith("file:"):
+            # On a test Mac the microphone input reached the rules with most of the sound missing; listening there would
+            # look alive and hear a fraction of what happens. Say so plainly rather than half-work.
+            return MAC_NOT_READY
         self._stop_demo()
         with self.lock:
             self.bound = contextvars.copy_context()
