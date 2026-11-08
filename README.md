@@ -4,6 +4,8 @@
 
 ![Signal Dog: hears what I can't, tells me in chat](docs/banner.png)
 
+![Real recordings of a door knock and a smoke alarm, and the two chat messages Signal Dog sends](docs/demo.gif)
+
 A Hermes Agent plugin that listens through your computer's microphone for household
 sounds and tells you in chat when it hears one:
 
