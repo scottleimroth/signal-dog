@@ -20,6 +20,7 @@ import time
 
 from . import graph
 from .detect import Config, Detector
+from .ongoing import Alarms
 
 log = logging.getLogger("plugin.signal-dog")
 
@@ -125,8 +126,11 @@ class _Stream:
                     muted = self.muted
                     if not muted:
                         owner.frames += 1
-                    for ev in det.feed(vals[i:i + graph.CHANNELS]):
-                        if not muted:
+                    events = det.feed(vals[i:i + graph.CHANNELS])
+                    if not muted:
+                        for ev in owner.alarms.feed(owner.frames / 100.0, events, det.beep.sounding):
+                            if ev["kind"] == "beep_stopped":
+                                det.rearm_beep(ev["hz"])
                             owner._emit(ev)
                 if self.cfg.debug and not self.muted:
                     owner._flush_debug(det)
@@ -146,10 +150,12 @@ class _Stream:
 
 
 class Listener:
-    def __init__(self, source: str, on_event, log_path=None, cfg: Config = None, recycle_s: float = 0.0):
+    def __init__(self, source: str, on_event, log_path=None, cfg: Config = None, recycle_s: float = 0.0,
+                 reminder_s: float = 180.0, clear_s: float = 15.0):
         self.source = source or "default"
         self.on_event = on_event
         self.cfg = cfg or Config()
+        self.alarms = Alarms(reminder_s, clear_s, self.cfg.beep_spread)
         self.recycle_s = 0.0 if self.source.startswith("file:") else max(0.0, float(recycle_s))
         self.next_recycle = time.monotonic() + self.recycle_s
         self.numlog = NumbersLog(log_path if log_path is not None else default_log_path())
@@ -205,6 +211,8 @@ class Listener:
                 s.kill()
 
     def _fail(self, text: str):
+        for ev in self.alarms.interrupted():
+            self._emit(ev)
         self.error = text
         self.state = "error"
         self.numlog.line("down reason=%s" % text.replace("\n", " ")[:200])
@@ -310,6 +318,8 @@ class Listener:
                 self.state = "finished"
                 self.numlog.line("finished source=file")
                 return
+            for ev in self.alarms.interrupted():
+                self._emit(ev)
             reason = " | ".join(stream.stderr_tail) or "ffmpeg stopped (exit %s)" % code
             self.restarts += 1
             self.numlog.line("restart exit=%s reason=%s" % (code, reason[:160]))
@@ -335,7 +345,8 @@ class Listener:
                 hz, start, steps, prom, lit, rise_far, rise_low))
 
     def _emit(self, ev: dict):
-        self.event_count += 1
+        if ev["kind"] in ("knock", "beep"):
+            self.event_count += 1
         self.recent.append(time.strftime("%H:%M:%S ") + ev["kind"])
         self.numlog.line("event " + " ".join("%s=%s" % kv for kv in ev.items()))
         try:

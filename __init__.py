@@ -93,6 +93,14 @@ def caption(ev: dict) -> str:
                 text += " The room is noisy right now, so this may be the television or other sound. Worth a look."
             return text
         return "A steady tone around %.1f kHz has been sounding for %d seconds. An appliance or an alarm." % (khz, round(ev["seconds"]))
+    if kind in ("beep_ongoing", "beep_stopped", "beep_unknown"):
+        pitch = "Beeping around %.1f kHz" % (ev["hz"] / 1000.0)
+        if kind == "beep_ongoing":
+            return "%s: still beeping (%.1f min since first alert)." % (pitch, ev["elapsed_s"] / 60.0)
+        if kind == "beep_stopped":
+            return ("%s: no longer detected at %s (no matching tone for %.0f seconds). "
+                    "This does not mean it is safe." % (pitch, time.strftime("%H:%M %Z"), ev["absent_s"]))
+        return "%s: monitoring interrupted; whether it stopped is unknown." % pitch
     if kind == "down":
         return "Signal Dog has stopped listening: %s" % ev.get("text", "unknown reason")
     return "Signal Dog heard something (%s)." % kind
@@ -155,10 +163,11 @@ class _Plugin:
         self.demo_stop = threading.Event()
         self.demo_done_at = None               # when the last demo ended (time.time())
         self.knocks_on = True                  # /signaldog knocks off pauses knock messages; beeps and alarms still come
+        self.alarm_handles = {}                # only the sender thread reads or writes public message handles
         self.demo_result = None                # what the last demo did: {"alerts": [...], "posted": n, "failed": n}
 
     # ---- delivery: only the sender thread posts -----------------------------------------------------------
-    def _post_in(self, cv, text):
+    def _post_in(self, cv, text, alarm_key=None):
         """Post inside a saved conversation. Success needs `ok` AND not `delivered == False`: a local chat with
         nobody watching answers ok and delivered False."""
         result = []
@@ -170,6 +179,8 @@ class _Plugin:
             err = str(getattr(handle, "error", "") or "")
             if ok and isinstance(res, dict) and res.get("delivered") is False:
                 ok, err = False, "not_delivered (nobody is watching this chat)"
+            if ok and alarm_key is not None:
+                self.alarm_handles[alarm_key] = handle
             result.append((ok, err))
 
         try:
@@ -189,14 +200,15 @@ class _Plugin:
                 routes.append(cv)
         return routes
 
-    def _post(self, text):
+    def _post(self, text, alarm_key=None):
         routes = self._routes()
         if not routes:
             err = "no_conversation (run /signaldog on in the chat you want alerts in)"
         else:
             err = ""
             for cv in routes:
-                ok, err = self._post_in(cv, text)
+                ok, err = (self._post_in(cv, text) if alarm_key is None
+                           else self._post_in(cv, text, alarm_key))
                 if ok:
                     with self.lock:
                         if cv is not self.bound:
@@ -240,7 +252,33 @@ class _Plugin:
                 self.sent += 1
         return ok
 
-    def _deliver(self, text):
+    def _deliver(self, item):
+        """Only this thread owns edit handles; all other message types retain the normal queue route."""
+        if isinstance(item, str):
+            return self._deliver_text(item)
+        if item.get("reset"):
+            self.alarm_handles.clear()
+            return True
+        key, text, final = item["incident"], item["text"], item["final"]
+        try:
+            handle = self.alarm_handles.get(key)
+            edit = getattr(handle, "edit", None)
+            if callable(edit):
+                try:
+                    result = edit(text)
+                except Exception:
+                    result = {}       # another plugin host may supply a raising handle: use normal delivery
+                if result.get("ok") and result.get("delivered") is not False:
+                    with self.lock:
+                        self.sent += 1
+                        self.last_ok = time.strftime("%H:%M:%S")
+                    return True
+            return self._deliver_text(text, alarm_key=key)
+        finally:
+            if final:
+                self.alarm_handles.pop(key, None)
+
+    def _deliver_text(self, text, alarm_key=None):
         """Deliver one alert: waiting alerts first (so they arrive in order), then this one with retries."""
         with self.lock:
             waiting = bool(self.missed)
@@ -249,7 +287,7 @@ class _Plugin:
             return False
         err = ""
         for attempt in range(DELIVERY_TRIES):
-            ok, err = self._post(text)
+            ok, err = (self._post(text) if alarm_key is None else self._post(text, alarm_key))
             if ok:
                 with self.lock:
                     self.sent += 1
@@ -298,10 +336,15 @@ class _Plugin:
     def on_event(self, ev):
         if ev.get("kind") == "knock" and not self.knocks_on:
             return                             # paused by the owner; the numbers log still has it
-        if ev.get("kind") != "down":
+        if ev.get("kind") in ("knock", "beep"):
             self.alert_times.append(time.monotonic())
             self.last_alert = time.strftime("%H:%M:%S ") + ev["kind"]
-        self.outbox.put(caption(ev))
+        text = caption(ev)
+        if ev.get("incident"):
+            self.outbox.put({"text": text, "incident": ev["incident"],
+                             "final": ev["kind"] in ("beep_stopped", "beep_unknown")})
+        else:
+            self.outbox.put(text)
 
     # ---- who may give commands ----------------------------------------------------------------------------
     def _authorise(self, cmd, platform, source):
@@ -380,8 +423,12 @@ class _Plugin:
         source = source or str(self.ctx.get_config("source", "default") or "default")
         if self.listener is not None:
             self.listener.stop()
+        self.outbox.put({"reset": True})
         minutes = _hours(self.ctx.get_config("recycle_minutes", DEFAULT_RECYCLE_MINUTES), DEFAULT_RECYCLE_MINUTES)
-        self.listener = Listener(source, self.on_event, recycle_s=minutes * 60.0)
+        reminder = _bounded(self.ctx.get_config("alarm_reminder_minutes", 3), (3, 1, 60)) * 60.0
+        clear = _bounded(self.ctx.get_config("alarm_clear_seconds", 15), (15, 10, 300))
+        self.listener = Listener(source, self.on_event, recycle_s=minutes * 60.0,
+                                 reminder_s=reminder, clear_s=clear)
         self.listener.start()
         self.heartbeat_at = time.monotonic()
         if self.worker is None or not self.worker.is_alive():
@@ -408,6 +455,7 @@ class _Plugin:
         if self.listener is None:
             return "The demo was stopped." if demo_stopped else "Signal Dog was not listening."
         self.listener.stop()
+        self.outbox.put({"reset": True})
         with self.lock:
             self.missed.clear()
             self.lost = 0

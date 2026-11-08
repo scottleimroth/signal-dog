@@ -282,6 +282,8 @@ class _Beep:
         self.recent = deque(maxlen=20) if c.debug else None     # (step, tone energies, low-band energy), debug only
         self.low_acc = 0.0                 # the nine low bands summed over the four frames of this step, debug only
         self.rise = [None] * N_TONE        # (far, low) rise in dB when the band's running pulse began, debug only
+        self.sounding = set()             # spectral evidence for ongoing alarms, independent of learned room level
+        self.sound_run = [0] * N_TONE
         self.lit = 0                       # bands standing out on the step being judged (for the debug log)
         self.repeat_hold = -1              # step before which no further repeat alert is sent, at any pitch
         self.elsewhere = []                # (band, start step) of pulses in the last 30 s, to tell a busy room
@@ -325,9 +327,14 @@ class _Beep:
     def _judge(self, s: int, d, now: int) -> list:
         c, own, out = self.c, self.own, []
         proms = []
+        self.sounding = set()
         for k in range(N_TONE):
             nb = sorted(d[j] for j in self._nb[k])
-            proms.append(min(d[k] - nb[len(nb) // 2], d[k] - own[k]))
+            spectral = d[k] - nb[len(nb) // 2]
+            self.sound_run[k] = self.sound_run[k] + 1 if spectral >= c.beep_db else 0
+            if self.sound_run[k] >= c.beep_hold:
+                self.sounding.add(k)
+            proms.append(min(spectral, d[k] - own[k]))
         self.lit = sum(1 for p in proms if p >= c.beep_db)
         for k in range(N_TONE):
             prom = proms[k]
@@ -484,6 +491,7 @@ class Detector:
     def __init__(self, cfg: Config = None):
         self.c = cfg or Config()
         self.t = 0
+        self.cleared_beeps = set()
         self.knock = _Knock(self.c)
         self.beep = _Beep(self.c)
         self.knock.beep_busy = self._beep_busy      # route B stays silent while the beep side says the room is busy
@@ -495,6 +503,14 @@ class Detector:
         t = self.t
         self.t += 1
         return self.knock.step(t, frame) + self.beep.step(t, frame)
+
+    def rearm_beep(self, hz):
+        """After a confirmed quiet tail, the next alarm at this pitch must not wait out an old cooldown."""
+        self.cleared_beeps.add(hz)
+        k = min(range(N_TONE), key=lambda j: abs(TONE_BANDS[j] - hz))
+        for quiet in self.beep.quiet_until.values():
+            for j in range(max(0, k - self.c.beep_spread), min(N_TONE, k + self.c.beep_spread + 1)):
+                quiet[j] = -1
 
     def adopt(self, old: "Detector") -> dict:
         """Take over from `old`, a detector that has been running longer, what it knows that this one cannot yet.
@@ -517,6 +533,10 @@ class Detector:
         for kind in bp.quiet_until:
             for j in range(N_TONE):
                 bp.quiet_until[kind][j] = max(bp.quiet_until[kind][j], obp.quiet_until[kind][j] + ds)
+        # Muted warm-up may have set its own cooldown for an alarm that the reporting reader has since closed.
+        # Grouping owns the active incident, so rearming a previously closed pitch cannot duplicate that incident.
+        for hz in old.cleared_beeps:
+            self.rearm_beep(hz)
         bp.repeat_hold = max(bp.repeat_hold, obp.repeat_hold + ds)
         bp.busy_until = max(bp.busy_until, obp.busy_until + ds)
         start = obp.s - bp.s                      # the old clock's step at which this one started listening

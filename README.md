@@ -118,7 +118,7 @@ rotates (it keeps only its newest part), so older alerts are gone.
 It is off until you turn it on. Every 24 hours it posts "still listening", or says that
 it is not, so a dead listener is never silent. Settings: `source` (which microphone,
 default the system default), `heartbeat_hours` (0 turns the daily message off),
-`recycle_minutes` (see below) and `owner_ids`.
+`recycle_minutes` (see below), `alarm_reminder_minutes`, `alarm_clear_seconds` and `owner_ids`.
 
 **Why it replaces its microphone reader every 10 minutes.** On a live microphone, one `ffmpeg`
 process slowly uses more processor the longer it runs (measured on the capture alone, so it is
@@ -138,6 +138,32 @@ not listed. Alerts go only to the chat it was switched on in.
 was disconnected" message: when a retry works (every minute), when you next run a
 `/signaldog` command, or, on your own machine, when you next send a message. `/signaldog
 status` shows what is waiting.
+
+## Ongoing beeps
+
+The first beep or steady-tone alert is sent as soon as the existing detector finds it; grouping adds no delay.
+While a similar-pitch tone continues, later detections join that alert instead of filling the chat.
+Every `alarm_reminder_minutes` (default **3**, range 1–60), it updates to **still beeping** with the elapsed time.
+After `alarm_clear_seconds` of analysed audio without a matching tone (default **15**, range 10–300), it
+updates to **no longer detected**, with the local time and zone. This is **not a safety all-clear**.
+Knocks are unchanged. A different pitch, or a repeating alarm becoming a steady tone, still gets a fresh alert.
+Very tightly spaced beeps can be detected as both repeating and steady, so one sound can produce two alert cards;
+that second warning is retained rather than hiding a possible escalation.
+After the quiet tail, a new alarm at that pitch can alert again without waiting out the old detector cooldown.
+
+Hermes 0.23's public `post_message` handle supplies `edit`; no private Hermes state is changed.
+Desktop and the Ink TUI replace a keyed notification; the classic CLI prints each update as another line.
+Matrix implements edits, but this new ongoing-alert path has been live-tested only on local chat, not Matrix.
+If a route does not support editing, or an edit fails, Hermes may send a new message;
+the same three-minute update interval limits these reminders too. A failed delivery uses the existing missed-alert
+queue. On reconnect, a summary or fresh message may replace the original alert; message edits are not guaranteed.
+
+Grouping uses pitch, not appliance identity: two sounds at similar pitches may be grouped, and a different
+sound at the same pitch can keep an alert open. A missed or masked tone can make it report no longer detected
+while an alarm is still sounding. Long pauses can split one alarm into separate incidents. A stopped microphone,
+reader restart, or missing audio is **unknown**, never evidence that an alarm stopped. A file ending without enough
+quiet audio does not produce a stopped update. Switching off or restarting Hermes forgets ongoing incidents.
+The recent-alert tool and right/wrong marks still refer to detected starts, not each reminder or ending.
 
 ## How it works
 
@@ -244,7 +270,9 @@ https://github.com/karolpiczak/ESC-50) is not in this repository. The house reco
   clock-tick recordings raised a beep alert.
 - Beep false alerts with the television on were about 4 an hour in the recordings above (the target was 1).
   Beep alerts raised in a noisy room say so.
-- A smoke alarm that keeps sounding raises a new message about every 10 seconds.
+- Ongoing alarms update at most once per configured reminder interval, then report when matching tones are no longer
+  detected (see above). This is not proof an appliance stopped or a door was shut. Classic CLI and non-editing routes
+  show new messages rather than replacing the first.
 - Beeps shorter than about 0.16 seconds are mostly missed (some carbon-monoxide alarms use 0.1 s beeps). A made-up pattern of four 0.1 s beeps was found
   only in a very quiet room.
 - It listens only where the agent runs. It cannot hear a different room or house.

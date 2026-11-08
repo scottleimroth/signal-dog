@@ -1,5 +1,5 @@
 name: signal-dog
-version: 0.1.0
+version: 0.1.1
 description: Listens through the microphone for household sounds (a door knock, an
   appliance beeping, a smoke alarm) and sends you a chat message. Off until you turn
   it on with /signaldog on. Needs ffmpeg. Not a certified smoke alarm.
@@ -41,3 +41,13 @@ config_schema:
     default: 24
     label: Still-listening message
     description: Hours between "still listening" messages, so a dead listener is never silent. 0 turns them off.
+  alarm_reminder_minutes:
+    type: int
+    default: 3
+    label: Ongoing beep reminder
+    description: Minutes between ongoing beep updates (1 to 60). Edits the first alert where supported; otherwise sends a reminder.
+  alarm_clear_seconds:
+    type: int
+    default: 15
+    label: Beep absence time
+    description: Seconds of analysed audio without a matching tone before reporting no longer detected (10 to 300). Not a safety all-clear.
