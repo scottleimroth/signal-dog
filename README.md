@@ -126,7 +126,9 @@ never receives or stores sound. A small set of rules then looks for a pattern:
   alike in strength and loud, mostly without sharp clicks in them. When there has been a lot of
   thumping nearby in the last 30 seconds (someone typing, cooking or walking about), one set is
   not enough: it waits for a second set within 20 seconds, because people at a door knock again,
-  and the message says the room was busy. In a quiet room two dull thuds are enough. A single
+  and the message says the room was busy. Each thud must also be struck: it reaches full loudness within about 50 ms,
+  as a knuckle on a door does, where typing, footsteps and snoring mostly build up more slowly. In a quiet room two dull
+  thuds are enough. A single
   hit is not a knock, and a hand on a desk or a mug put down hard usually is not either.
 - **Beep:** a narrow band that stands out from the bands around it and from its own
   usual level, repeating three times at evenly spaced moments (within 80 milliseconds of
@@ -184,11 +186,12 @@ tuned on, so it shows a direction, not a promise. `docs/DETECTOR-DESIGN.md` has 
 | A public-domain recording of a real smoke alarm (Wikimedia Commons, 37 s) | alerted 4.5 s after the alarm began, and again as it kept sounding |
 | The standard smoke-alarm pattern (three half-second beeps, a pause), made by code and mixed into room noise at four loudnesses | found in 2.3 to 2.7 s each time |
 | 40 public door-knock recordings (ESC-50) mixed into room noise, loudest thud 25 dB over the room | 38 alerted (35 at 30 dB, 28 at 20 dB) |
-| The same test with 240 recordings of other sounds (footsteps, typing, mouse clicks, clock ticks, a creaking door, a can opening), each as loud as the knocks | 48 raised a knock alert |
-| The same test with 40 public snoring recordings | 31 raised a knock alert |
+| The same test with 240 recordings of other sounds (footsteps, typing, mouse clicks, clock ticks, a creaking door, a can opening), each as loud as the knocks | 43 raised a knock alert |
+| The same test with 40 public snoring recordings | 22 raised a knock alert |
 | 40 public alarm-clock recordings, same loudness | 26 raised a beep alert |
 | Television on, 1.3 hours in several sittings (tuned on) | 5 beep alerts and 1 knock alert nobody asked for |
 | An ordinary evening, television off, 35 minutes (tuned on) | 14 knock alerts nobody asked for, no beep alerts |
+| 49 minutes at home, nobody at the door, recorded after the knock rules were written (32 of them helped set the strike limit) | 14 knock alerts nobody asked for, down from 48 without the two knock checks |
 | A quiet house overnight, television off, 8 hours (not tuned on) | 7 soft knock alerts (snoring is the likely cause) and 1 beep alert, cause unknown |
 | Running all night with its reader swapped every 10 minutes | 8.5 hours, 8 to 9 percent of one processor core, no crash |
 
@@ -202,8 +205,9 @@ https://github.com/karolpiczak/ESC-50) is not in this repository. The house reco
 - It can miss sounds and it can raise false alerts. Knock alerts are the weaker side: Signal Dog hears
   "something thumped three times", not "someone is at the door". Footsteps, typing, mouse clicks, a creaking
   door and snoring can all do it when they are loud and close (see the table). On an ordinary evening at home, awake
-  and with no visitors, it raised 82 knock alerts in 133 minutes, every one of them false. In a room busy with thumps it waits
-  for a second set of knocks and says the room was busy, which cut these alerts by a third on the saved recordings and by about a quarter on a fresh 32 minutes, but does not end them; while
+  and with no visitors, it raised 82 knock alerts in 133 minutes, every one of them false (before the two knock checks). In a room busy with thumps it waits
+  for a second set of knocks and says the room was busy, and every knock must be struck (full loudness within about 50 ms).
+  Together these cut false knock alerts at home by about 70 percent (48 to 14 in 49 fresh minutes), but do not end them; while
   you cook or tidy, `/signaldog knocks off` pauses knock messages and keeps the beeps.
 - With the television on, only the three-thud route works, and a knock has to be loud (at least 20 dB above
   the room). Soft knocks and two-knock knocks are missed then, and for up to two minutes after the television goes
@@ -217,16 +221,17 @@ https://github.com/karolpiczak/ESC-50) is not in this repository. The house reco
   clock-tick recordings raised a beep alert.
 - Beep false alerts with the television on were about 4 an hour in the recordings above (the target was 1).
   Beep alerts raised in a noisy room say so.
-- It has been tested on one recording of a real smoke alarm, a smoke-alarm sound played from a phone and the standard pattern made by code. It has not
-  been tested on an alarm sounding in a house, or in a noisy room. A continuing alarm raises a new message about every 10 seconds.
+- A smoke alarm that keeps sounding raises a new message about every 10 seconds.
 - Beeps shorter than about 0.16 seconds are mostly missed (some carbon-monoxide alarms use 0.1 s beeps). A made-up pattern of four 0.1 s beeps was found
   only in a very quiet room.
 - It listens only where the agent runs. It cannot hear a different room or house.
 - A gateway restart stops the listener and empties the missed alerts. Run `/signaldog on`
   again after one.
-- The agent's tool (`signal_dog_recent_alerts`) is registered, switched on in Hermes's default toolsets, listed
-  for the agent, and answers correctly when called through Hermes's tool layer in the official Hermes Docker image. A live
-  model asking it a question has not been tried.
+- The agent's tool (`signal_dog_recent_alerts`) has been used by a live Hermes agent on a local model: asked in plain
+  words what the house heard, it found the tool, called it and answered with the right times and pitch. Hermes finds
+  the tool by keywords, so a model that searches with a whole question rather than keywords may not find it.
+- In a very echoey room a knock can land on the echo of the one before and be missed: with echo added to the public
+  knocks, 33 of 37 (room echo) and 28 of 37 (hall echo) still alerted.
 - Delivery has been tested on two routes only: Hermes's local chat, and Matrix in an
   unencrypted room on a throwaway server (with a network outage and a `/new`). Every other
   messaging app, and encrypted rooms, have not been tested.

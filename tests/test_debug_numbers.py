@@ -258,6 +258,14 @@ class ReplayGateTests(unittest.TestCase):
 
     PAIR = [thud_line(1500, 15), thud_line(1525, 15)]       # two dull thuds 250 ms apart
 
+    def test_the_logged_rise_decides_a_pair_and_an_old_line_without_it_passes(self):
+        start = ["2026-11-07T10:00:00+1100 start source=default"]
+        with_rise = lambda a, b: [self.PAIR[0] + " attack=%s fall=6" % a, self.PAIR[1] + " attack=%s fall=6" % b]
+        self.assertEqual(len(self.alerts(start + with_rise(3, 4))), 1)
+        self.assertEqual(self.alerts(start + with_rise(14, 20)), [])
+        self.assertEqual(len(self.alerts(start + with_rise("None", "None"))), 1)
+        self.assertEqual(len(self.alerts(start + self.PAIR)), 1)
+
     def test_two_dull_thuds_alert_when_the_log_has_no_busy_room(self):
         self.assertEqual(len(self.alerts(["2026-11-07T10:00:00+1100 start source=default"] + self.PAIR)), 1)
 

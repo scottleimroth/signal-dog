@@ -171,6 +171,75 @@ class ThumpingRoomTests(unittest.TestCase):
         self.assertEqual(len(ev), 1)
         self.assertTrue(ev[0]["busy"])
 
+
+def ramp_signal(thuds, rise_frames, tail=200):
+    """Like signal(), but each thud builds up evenly over rise_frames before its five loud frames."""
+    n = LEAD + max(t[0] for t in thuds) + tail
+    on = {}
+    for t in thuds:
+        at, low, high = t[:3]
+        r = t[3] if len(t) > 3 else rise_frames          # a thud may carry its own build-up
+        for i in range(r):
+            on[LEAD + at - r + i] = (1.0 + (low - 1.0) * (i + 1) / r, 1.0)
+        for i in range(5):
+            on[LEAD + at + i] = (low, high)
+    return [frame(*on[i]) if i in on else frame() for i in range(n)]
+
+
+def run_frames(frames):
+    det = detect.Detector()
+    ev = []
+    for f in frames:
+        ev += det.feed(f)
+    return [e for e in ev if e["kind"] == "knock"]
+
+
+class StrikeTests(unittest.TestCase):
+    """A knock is a strike: its thuds reach their peak at once. Sounds that build up slowly are not knocks."""
+
+    def test_a_pair_that_builds_up_slowly_is_not_a_knock_and_the_same_pair_struck_is(self):
+        pair = knock((25,), low=300.0, start=200)
+        self.assertEqual(len(run_frames(ramp_signal(pair, 1))), 1)
+        self.assertEqual(run_frames(ramp_signal(pair, 20)), [])
+
+    def test_three_slow_thuds_in_a_busy_room_are_not_a_knock(self):
+        self.assertEqual(len(run_frames(ramp_signal(BUSY + knock(), 1))), 1)
+        self.assertEqual(run_frames(ramp_signal(BUSY + knock(), 20)), [])
+
+    def test_each_thud_keeps_its_own_rise_so_two_slow_ones_spoil_a_set_that_ends_struck(self):
+        slow_slow_struck = [(AT, LOUD, DULL, 20), (AT + 25, LOUD, DULL, 20), (AT + 50, LOUD, DULL, 1)]
+        struck_struck_slow = [(AT, LOUD, DULL, 1), (AT + 25, LOUD, DULL, 1), (AT + 50, LOUD, DULL, 20)]
+        self.assertEqual(run_frames(ramp_signal(BUSY + slow_slow_struck, 1)), [])
+        self.assertEqual(len(run_frames(ramp_signal(BUSY + struck_struck_slow, 1))), 1)
+
+    def test_one_unknown_rise_in_three_leaves_the_faster_known_one_to_decide(self):
+        k = detect._Knock(detect.Config())
+        self.assertTrue(k._struck([None, 3, 30]))
+        self.assertFalse(k._struck([None, 12, 30]))
+
+    def test_the_limit_is_five_frames_from_ten_db_under_the_peak(self):
+        k = detect._Knock(detect.Config())
+        self.assertTrue(k._struck([5, 5, 5]))
+        self.assertFalse(k._struck([6, 6, 6]))
+
+    def test_the_middle_of_three_and_the_faster_of_two_decide_and_unknown_passes(self):
+        k = detect._Knock(detect.Config())
+        self.assertTrue(k._struck([3, 4, 30]))           # one slow thud among three struck ones
+        self.assertFalse(k._struck([3, 30, 30]))         # two slow of three
+        self.assertTrue(k._struck([3, 30]))              # a pair: the faster one
+        self.assertFalse(k._struck([12, 30]))
+        self.assertTrue(k._struck([None, None, None]))   # loud room, rise not measurable: passes
+        self.assertTrue(k._struck([None, 30]) is False)  # the only known rise is slow
+        self.assertTrue(k._struck([None, 2]))
+
+    def test_rise_is_measured_on_the_smoothed_trace_and_unknown_when_history_stays_loud(self):
+        k = detect._Knock(detect.Config())
+        k.hist.extend([(90, 2.0, 0.0), (95, 20.0, 0.0), (100, 25.0, 0.0)])
+        self.assertEqual(k._rise(100, 25.0), 10)        # 2 dB at frame 90 is the last moment 10 dB under 25
+        k.hist.clear()
+        k.hist.extend([(90, 18.0, 0.0), (100, 25.0, 0.0)])
+        self.assertIsNone(k._rise(100, 25.0))
+
 # Thirty single pulses 0.4 s apart in tone bands far from one another: the beep side calls the room busy, and the pulses
 # themselves repeat nothing, so they alert on nothing. Frames, from the start of the signal.
 NOISE = [(((i // 2) if i % 2 == 0 else (53 - i // 2)), 100 + i * 40, 20) for i in range(30)]

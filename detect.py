@@ -50,6 +50,13 @@ class Config:
     knock_busy_thuds = 6           # thuds in the 30 s before a set (not counting its own last second) make the room busy
     knock_confirm = 2000           # frames: in a busy room, the set before must be this recent ...
     knock_set_gap = 50             # ... and at least this much earlier (500 ms), so it is a set of its own
+    # A knock is a strike: each thud reaches its peak almost at once. Typing, footsteps, snoring and most household
+    # thumping build up more slowly. Rise: frames on the smoothed low-band trace from 10 dB under the peak up to it.
+    # A set passes when its middle rise (of three; the faster of a pair) is at most this. A rise that cannot be
+    # measured passes: the trace never fell 10 dB under the peak in the history kept (about 270 ms before the peak),
+    # as with loud television. In a very echoey room a knock can land on the echo of the last one and read as slow:
+    # measured on public knocks with echo added, this costs about 1 in 10 (room echo) to 1 in 4 (hall echo).
+    knock_rise = 5
     # Route B, quiet room only: two dull thuds. A room is busy when this many thuds came in the last 30 s, or while
     # the beep side says the room is busy (_Beep.busy_until).
     knock_busy = 3
@@ -109,6 +116,8 @@ class _Knock:
         self.last_sharp = None
         self.thuds = []                    # (frame, strength dB, high-band dB near it) of every thud in the last 30 s
         self.last_set = None               # frame of the last thud of the last set of three that route A accepted
+        self.rises = {}                    # frame -> rise (frames, or None if it cannot be measured) of each thud in self.thuds
+        self.forced_rise = False           # tools/replay_thuds.py sets the logged rise here; False means measure it
         self.dlog = []                     # why each thud was kept or thrown out, only when debug is on
         self.shape = deque(maxlen=40) if c.debug else None     # (frame, energy over the room in each low band), debug only
         self.beep_busy = lambda: False     # Detector sets this: does the beep side say the room is busy right now?
@@ -173,10 +182,12 @@ class _Knock:
             self.dlog.append((tt, round(level, 1), round(high, 1), round(max(loud), 1) if loud else None,
                               round(max(near), 1) if near else None, sharp) + self._shape_of(tt, level))
         near_db = max(near) if near else -99.0
+        rise = self._rise(tt, level) if self.forced_rise is False else self.forced_rise
         # Route A, any room: three thuds, evenly spaced, alike, loud, mostly dull. A television throws up sharp
         # transients that spoil two-thud knocks, but it does not keep time like a hand on a door.
         self.thuds = [h for h in self.thuds if tt - h[0] <= c.knock_memory]
-        three = self._three([h for h in self.thuds if tt - h[0] <= c.knock_reach], tt, level, near_db)
+        self.rises = {f: r for f, r in self.rises.items() if tt - f <= c.knock_memory}
+        three = self._three([h for h in self.thuds if tt - h[0] <= c.knock_reach], tt, level, near_db, rise)
         thud_busy = False
         if three:
             thud_busy = sum(1 for h in self.thuds if c.knock_reach < tt - h[0] <= c.knock_memory) >= c.knock_busy_thuds
@@ -185,6 +196,7 @@ class _Knock:
                 three = False              # the first set in a busy room: wait for a second
         busy = sum(1 for h in self.thuds if tt - h[0] > c.gap_max) >= c.knock_busy
         self.thuds.append((tt, level, near_db))
+        self.rises[tt] = rise
         route = "three" if three else None
         # a hand strike on a desk is a sharp impact followed by a dull rebound: throw out both
         if sharp or (self.last_sharp is not None and tt - self.last_sharp <= c.sharp_shadow):
@@ -196,9 +208,10 @@ class _Knock:
             # a thud closer than 150 ms is an echo or a bounce of the last one, not a new thud
             if not (gap is not None and gap < c.gap_min and self.train >= 1):
                 self.train = self.train + 1 if gap is not None and c.gap_min <= gap <= c.gap_max else 1
-                self.last_peak = tt
-                # Route B, quiet room only: two dull thuds
-                if route is None and self.train >= 2 and not busy and not self.beep_busy():
+                prev, self.last_peak = self.last_peak, tt
+                # Route B, quiet room only: two dull thuds, struck (the faster of the two rises quickly)
+                if (route is None and self.train >= 2 and not busy and not self.beep_busy()
+                        and self._struck([self.rises.get(prev), rise])):
                     route = "two"
         out = []
         if route:
@@ -208,13 +221,26 @@ class _Knock:
             self.session_until = tt + c.knock_session
         return out
 
+    def _rise(self, tt: int, level: float):
+        """Frames from the last moment the smoothed low band was 10 dB under this thud's peak up to the peak, or None
+        if the 40 frames of history never fall that low."""
+        cut = level - 10.0
+        return next((tt - h[0] for h in reversed(self.hist) if h[0] < tt and h[1] <= cut), None)
+
+    def _struck(self, rises) -> bool:
+        """Does a set of thuds rise like a strike? The middle rise of three, the faster of two; unknown passes."""
+        known = sorted(r for r in rises if r is not None)
+        if not known:
+            return True
+        return (known[1] if len(known) == 3 else known[0]) <= self.c.knock_rise
+
     def _shape_of(self, tt: int, level: float) -> tuple:
         """Debug numbers for one thud: (attack, fall, share of 70-172 Hz, 232-420 Hz, 565-760 Hz). Attack is the frames
         from 10 dB under the peak up to it; fall the frames from the peak down to 10 dB under it (None if not reached
         by the time the thud is decided, or if the history does not reach back that far). The shares are percentages
         of the energy over the room's usual level in the nine low bands, at the peak frame."""
         cut = level - 10.0
-        attack = next((tt - h[0] for h in reversed(self.hist) if h[0] < tt and h[1] <= cut), None)
+        attack = self._rise(tt, level)
         fall = next((h[0] - tt for h in self.hist if h[0] > tt and h[1] <= cut), None)
         over = next((e for f, e in (self.shape or ()) if f == tt), None)
         total = sum(over) if over else 0.0
@@ -222,7 +248,7 @@ class _Knock:
             return (attack, fall, None, None, None)
         return (attack, fall) + tuple(round(100.0 * sum(over[a:b]) / total, 1) for a, b in ((0, 4), (4, 7), (7, 9)))
 
-    def _three(self, recent, tt: int, level: float, near_db: float) -> bool:
+    def _three(self, recent, tt: int, level: float, near_db: float, rise=None) -> bool:
         c = self.c
         for i in range(len(recent)):
             for j in range(i + 1, len(recent)):
@@ -233,7 +259,8 @@ class _Knock:
                 lows = (recent[i][1], recent[j][1], level)
                 if max(lows) - min(lows) > c.knock_level_span or max(lows) < c.knock_floor_db:
                     continue
-                if sum(1 for x in (recent[i][2], recent[j][2], near_db) if x < c.knock_dull_db) >= 2:
+                if (sum(1 for x in (recent[i][2], recent[j][2], near_db) if x < c.knock_dull_db) >= 2
+                        and self._struck([self.rises.get(recent[i][0]), self.rises.get(recent[j][0]), rise])):
                     return True
         return False
 
@@ -484,6 +511,7 @@ class Detector:
         kn.session_until = max(kn.session_until, okn.session_until + df)
         before = old.t - self.t                   # the old clock's frame at which this one started listening
         kn.thuds = sorted([(f + df, lo, nr) for f, lo, nr in okn.thuds if f <= before] + kn.thuds)
+        kn.rises.update({f + df: r for f, r in okn.rises.items() if f <= before and f + df not in kn.rises})
         if kn.last_set is None and okn.last_set is not None and okn.last_set <= before:
             kn.last_set = okn.last_set + df
         for kind in bp.quiet_until:

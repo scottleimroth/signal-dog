@@ -44,7 +44,8 @@ either route firing):
   counting its own last second) a set alerts only if another accepted set ended 0.5 to 20 s
   before it: people at a door knock again, and a person typing, cooking or walking about
   throws up an even three by chance. Such an alert carries `busy: true` and its message says
-  the room was busy.
+  the room was busy. *Struck:* every set must also rise like a strike (see *The strike test* below).
+  This applies to Route B too.
 - *Route B, quiet room only:* two dull (not sharp) thuds 150 to 450 ms apart. A room is busy
   when three or more thuds came in the 30 s before (not counting the last 450 ms), or while the
   beep side says the room is busy (see *A busy room* below), and then only Route A applies. A
@@ -203,7 +204,38 @@ found only in the quietest runs: a pulse must hold 160 ms to count, so beeps thi
 ## Held-out check of the knock rule
 
 The second-set-in-a-thumping-room rule was written from earlier logs. On a fresh 32 minutes at home with nobody at the door
-(1,287 thuds, so every knock alert was false), the rule before it alerted 33 times and the kept rule 25.
+(1,287 thuds, so every knock alert was false), the rule before it alerted 33 times and the kept rule 25 (9 with the
+strike test as well). On 17 more minutes, 15, 11 and 5.
+
+## The strike test, 8 November
+
+A knuckle on a door reaches full loudness at once; typing, footsteps, snoring and most household thumping build up. For
+each thud the rise is the frames on the smoothed low-band trace from the last moment 10 dB under the peak up to the peak.
+A set of three passes when its middle rise is at most 5 frames, a pair when the faster of the two is; a rise that cannot be
+measured (the trace never fell 10 dB under the peak in the roughly 270 ms of history kept, as with loud television) passes.
+
+How it was found: over every set the knock rules accepted, the rise separated knocks from the rest better than anything
+else measured (attack AUC 0.09 against 0.26 to 0.60 for fall time, band shares, sharpness and loudness). Knocks: the 40 public
+door knocks at 25 and 30 dB and the owner's 3 real door-knock recordings, 76 of 77 sets kept, all 3 of the owner's. False:
+280 public other sounds and 32 minutes at home, 284 sets cut to 147.
+
+Through the real code:
+
+| Test | Without the strike test | With it |
+|---|---|---|
+| Public door knocks, 25 dB (of 40) | 38 | 38 |
+| Public other sounds, 25 dB (of 240) | 48 | 43 |
+| Public snoring, 25 dB (of 40) | 31 | 22 |
+| The owner's 3 real door-knock recordings | 3 | 3 |
+| 17 minutes at home never used to choose anything | 11 false knock alerts | 5 |
+| 32 minutes at home (helped choose the limit) | 25 | 9 |
+| Public knocks with room echo added (of 40) | 37 | 33 |
+| Public knocks with hall echo added (of 40) | 37 | 28 |
+
+An independent review found the echo cost: in an echoey room the next knock lands on the echo of the last, so the trace
+does not fall 10 dB between them and the rise reads as slow. Counting such a rise as unknown saved 1 hall-echo knock in 40
+but let half the at-home false alerts back through (5 became 7, 9 became 17), so it was not kept. Old logs carry no rise,
+so `tools/replay_thuds.py` passes them unchanged; logs from debug runs since 7 November carry it and are replayed with it.
 
 ## What the numbers do not show
 

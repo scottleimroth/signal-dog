@@ -38,13 +38,14 @@ def load():
 
 
 THUD = re.compile(r" thud frame=(\d+) low_db=(-?[\d.]+) high_db=(-?[\d.]+) worst_high_minus_low=(\S+) near_high_db=(\S+) sharp=\w+")
+ATTACK = re.compile(r" attack=(\S+)")    # debug logs since 7 November: the thud's rise, used by the knock rule
 START = re.compile(r" (?:start source=|recycle done)")
 
 
 def read_log(path, first="", last="~", rows_only=True):
     """One entry per life of the log's detector that has thuds in it: {"rows": the thud rows from `first` to `last`,
     "pulses": every pulse line of that life up to `last`}. The log is in time order, so reading stops after `last`.
-    Each life also has "rows_at" and "pulses_at" (the whole 19-character time of each line) and
+    For tools/bench.py each life also has "rows_at" and "pulses_at" (the whole 19-character time of each line) and
     "began" (the time of the line that began it, "" if it is the log's first) and "swapped" (True when it began at a
     `recycle done` line that carries offsets: the live detector then carried the old one's busy hold and thud memory
     over, which this reader does not replay). rows_only=False keeps every life, also
@@ -72,7 +73,9 @@ def read_log(path, first="", last="~", rows_only=True):
             prev = frame
             if line[:19] >= first:
                 num = lambda s: None if s == "None" else float(s)
-                segs[-1]["rows"].append((line[11:19], frame, float(m.group(2)), float(m.group(3)), num(m.group(4)), num(m.group(5))))
+                a = ATTACK.search(line)
+                segs[-1]["rows"].append((line[11:19], frame, float(m.group(2)), float(m.group(3)), num(m.group(4)), num(m.group(5)),
+                                         num(a.group(1)) if a else None))
                 segs[-1]["rows_at"].append(line[:19])
             continue
         m = replay_pulses.PULSE.search(line)
@@ -102,10 +105,13 @@ def replay(rows, cfg=None, pulses=None):
         return i >= 0 and step <= timeline[i][1]
 
     k, prev, alerts = detect._Knock(cfg), -1, []
-    for when, frame, low, high, worst, near in rows:
+    for row in rows:
+        when, frame, low, high, worst, near = row[:6]
         if frame < prev:
             k = detect._Knock(cfg)
         prev = frame
+        # the logged rise when the log has it; an older log has none, and an unknown rise passes, as it does live
+        k.forced_rise = row[6] if len(row) > 6 else None
         k.beep_busy = lambda at=frame + cfg.peak_merge: beep_busy(at)
         k.hist = collections.deque(maxlen=40)
         if worst is not None:

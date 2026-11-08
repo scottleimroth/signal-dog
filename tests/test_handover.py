@@ -81,6 +81,14 @@ class CarryOverTests(unittest.TestCase):
         self.assertEqual(new.knock.session_until, 2000)
         self.assertEqual(new.knock.thuds, [(-2900, 22.0, 1.0), (1000, 22.0, 1.0)])
 
+    def test_the_rise_of_each_carried_thud_is_carried_too(self):
+        old, new = detect.Detector(), detect.Detector()
+        old.t, new.t = 6000, 3000
+        old.knock.thuds, old.knock.rises = [(100, 22.0, 1.0), (4000, 22.0, 1.0)], {100: 3, 4000: 30}
+        new.knock.thuds, new.knock.rises = [(1000, 22.0, 1.0)], {1000: None}
+        new.adopt(old)
+        self.assertEqual(new.knock.rises, {-2900: 3, 1000: None})
+
 
 if __name__ == "__main__":
     unittest.main()
