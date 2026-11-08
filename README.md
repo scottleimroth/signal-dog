@@ -4,6 +4,8 @@
 
 ![Signal Dog: hears what I can't, tells me in chat](docs/banner.png)
 
+**Demo video (68 seconds):** https://x.com/ScottLeimroth/status/2119318814991188312
+
 ![Real recordings of a door knock and a smoke alarm, and the two chat messages Signal Dog sends](docs/demo.gif)
 
 A Hermes Agent plugin that listens through your computer's microphone for household
