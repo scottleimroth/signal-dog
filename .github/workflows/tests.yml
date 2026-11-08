@@ -67,10 +67,15 @@ jobs:
           from signal_dog import graph
           base = graph.command("default")
           i = base.index("-f")
+          fc = base.index("-filter_complex") + 1
+          def with_graph(g):
+              c = list(base); c[fc] = g; return c
+          g0 = base[fc]
           variants = {
               "as shipped": base,
-              "thread_queue_size 1024": base[:i] + ["-thread_queue_size", "1024"] + base[i:],
-              "thread_queue_size 4096": base[:i] + ["-thread_queue_size", "4096"] + base[i:],
+              "timestamps from samples, at input": with_graph(g0.replace("[0:a]", "[0:a]asetpts=N/SR/TB,", 1)),
+              "timestamps from samples, after resample": with_graph(g0.replace("aresample=16000,", "aresample=16000,asetpts=N/SR/TB,", 1)),
+              "both": with_graph(g0.replace("[0:a]", "[0:a]asetpts=N/SR/TB,", 1).replace("aresample=16000,", "aresample=16000,asetpts=N/SR/TB,", 1)),
           }
           for name, cmd in variants.items():
               cmd = [c if c != "error" else "warning" for c in cmd]
