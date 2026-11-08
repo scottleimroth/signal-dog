@@ -1,5 +1,9 @@
 # Signal Dog
 
+**Listens through your computer's microphone for a knock at the door, an appliance beeping or a smoke alarm, and tells you in your Hermes chat. Built by a deaf developer for his own home.**
+
+![Signal Dog: hears what I can't, tells me in chat](docs/banner.png)
+
 A Hermes Agent plugin that listens through your computer's microphone for household
 sounds and tells you in chat when it hears one:
 
@@ -26,6 +30,14 @@ In the chat where you switched it on:
 
 No microphone? `/signaldog demo` plays a short recording made by code through the real listener
 and posts what it finds, each message labelled DEMO. It needs only `ffmpeg`.
+
+## Why a plugin (not a skill or prompt)
+
+A skill or a prompt can only shape what the model says when someone talks to it. Signal Dog has to listen all the
+time, including when nobody is chatting: it runs `ffmpeg` in the background, turns the sound into 64 numbers 100
+times a second, and posts into your chat by itself the moment it hears a knock or an alarm. It also gives the agent
+a tool to answer "what did you hear while I was out?", and slash commands to switch it on, check on it, pause knocks
+and mark alerts right or wrong. None of that is possible from a prompt. No extra model: the rules are plain Python.
 
 ## Why not use the phone
 
