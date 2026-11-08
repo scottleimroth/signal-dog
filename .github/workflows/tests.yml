@@ -36,6 +36,31 @@ jobs:
             macOS)   ffmpeg -hide_banner -f avfoundation -list_devices true -i "" 2>&1 | tail -8 || true ;;
             Windows) ffmpeg -hide_banner -list_devices true -f dshow -i dummy 2>&1 | tail -8 || true ;;
           esac
+      - name: Live microphone input (macOS), 5 seconds through the plugin's own ffmpeg command
+        if: runner.os == 'macOS'
+        run: |
+          python -B - <<'PY'
+          import subprocess, sys, time
+          sys.path.insert(0, "tools")
+          import replay
+          replay.load()
+          from signal_dog import graph
+          cmd = graph.command("default")
+          print("input:", graph.microphone_input("default"))
+          p = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=graph.environment())
+          got, start = 0, time.time()
+          while time.time() - start < 5.0:
+              chunk = p.stdout.read(graph.FRAME_BYTES * 10)
+              if not chunk:
+                  break
+              got += len(chunk)
+          p.kill(); p.wait(5)
+          frames = got // graph.FRAME_BYTES
+          print("frames in 5 s:", frames, "(about 500 expected)")
+          if frames < 300:
+              print(p.stderr.read().decode("utf-8", "replace")[-600:])
+              sys.exit(1)
+          PY
       - name: Unit tests (standard Python only)
         working-directory: tests
         run: python -B -m unittest discover -s . -v
