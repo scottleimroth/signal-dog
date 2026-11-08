@@ -36,6 +36,25 @@ jobs:
             macOS)   ffmpeg -hide_banner -f avfoundation -list_devices true -i "" 2>&1 | tail -8 || true ;;
             Windows) ffmpeg -hide_banner -list_devices true -f dshow -i dummy 2>&1 | tail -8 || true ;;
           esac
+      - name: Diagnose (macOS) - the audio device alone, and the plugin's filters on a file
+        if: runner.os == 'macOS'
+        continue-on-error: true
+        run: |
+          echo "== the device alone, 6 s, no filters"
+          ffmpeg -hide_banner -f avfoundation -i ":0" -t 6 -f null - 2>&1 | grep -E "Stream|time=|speed=" | tail -4 || true
+          echo "== the plugin's 64 filters on 30 s of noise from a file, as fast as possible"
+          ffmpeg -hide_banner -loglevel error -y -f lavfi -i "anoisesrc=color=pink:amplitude=0.01:sample_rate=48000:duration=30" -ac 2 /tmp/noise.wav
+          python -B - <<'PY'
+          import subprocess, sys, time
+          sys.path.insert(0, "tools")
+          import replay
+          replay.load()
+          from signal_dog import graph
+          t = time.time()
+          p = subprocess.run(graph.command("file:/tmp/noise.wav", realtime=False), capture_output=True)
+          dt = time.time() - t
+          print("30 s of sound took %.1f s: %.0f times faster than real time; frames %d" % (dt, 30 / dt, len(p.stdout) // graph.FRAME_BYTES))
+          PY
       - name: Live microphone input (macOS), 5 seconds through the plugin's own ffmpeg command
         if: runner.os == 'macOS'
         run: |
