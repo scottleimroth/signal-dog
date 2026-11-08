@@ -110,8 +110,7 @@ jobs:
           t = time.time(); p = subprocess.run(cmd, capture_output=True); dt = time.time() - t
           import os
           print("10 s of input took %.1f s of wall time; frames out %d (1000 expected); exit %d" % (dt, os.path.getsize("/tmp/out.f32") // graph.FRAME_BYTES, p.returncode))
-          print("
-".join(l for l in p.stderr.decode("utf-8", "replace").splitlines() if "Stream" in l or "Hz" in l or "speed" in l)[-900:])
+          print(chr(10).join(l for l in p.stderr.decode("utf-8", "replace").splitlines() if "Stream" in l or "Hz" in l or "speed" in l)[-900:])
           PY
       - name: Live microphone input (macOS), 5 seconds through the plugin's own ffmpeg command
         if: runner.os == 'macOS'
