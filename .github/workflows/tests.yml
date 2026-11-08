@@ -48,16 +48,21 @@ jobs:
           cmd = graph.command("default")
           print("input:", graph.microphone_input("default"))
           p = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=graph.environment())
-          got, start = 0, time.time()
-          while time.time() - start < 5.0:
+          got, start, first = 0, time.time(), None
+          while time.time() - start < 12.0:
               chunk = p.stdout.read(graph.FRAME_BYTES * 10)
               if not chunk:
                   break
+              if first is None:
+                  first = time.time()
               got += len(chunk)
+          end = time.time()
           p.kill(); p.wait(5)
           frames = got // graph.FRAME_BYTES
-          print("frames in 5 s:", frames, "(about 500 expected)")
-          if frames < 300:
+          rate = frames / max(end - first, 1e-6) if first else 0.0
+          print("first reading after %.1f s; then %d frames in %.1f s = %.0f a second (100 expected)" % (
+              (first or end) - start, frames, end - (first or end), rate))
+          if rate < 80:
               print(p.stderr.read().decode("utf-8", "replace")[-600:])
               sys.exit(1)
           PY
