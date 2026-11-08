@@ -12,6 +12,9 @@ Channels 10-63 beep bands, 64 Hz apart, 1000 to 4448 Hz
 from __future__ import annotations
 
 import os
+import platform
+import re
+import subprocess
 
 FRAME_RATE = 100
 LOW_BANDS = (70, 95, 128, 172, 232, 312, 420, 565, 760)
@@ -52,13 +55,41 @@ def filter_graph() -> str:
     return ";".join(parts)
 
 
+def microphone_input(source: str = "default", system: str = "") -> list:
+    """ffmpeg's input for a live microphone. Linux and WSL: PulseAudio (`source` is a PulseAudio source name). Windows:
+    DirectShow (`source` is the device name ffmpeg lists; "default" is the first microphone it lists). macOS:
+    AVFoundation (`source` is the audio device index or name; "default" is the first, index 0)."""
+    system = system or platform.system()
+    source = source or "default"
+    if system == "Windows":
+        name = default_windows_microphone() if source == "default" else source
+        return ["-f", "dshow", "-audio_buffer_size", "50", "-i", "audio=" + (name or "")]
+    if system == "Darwin":
+        return ["-f", "avfoundation", "-i", ":" + ("0" if source == "default" else source)]
+    return ["-fflags", "nobuffer", "-f", "pulse", "-i", source]
+
+
+_DSHOW_AUDIO = re.compile(r'"([^"]+)" \(audio\)')
+
+
+def default_windows_microphone():
+    """The first audio capture device DirectShow lists, or None. ffmpeg prints the list on stderr."""
+    try:
+        p = subprocess.run(["ffmpeg", "-hide_banner", "-list_devices", "true", "-f", "dshow", "-i", "dummy"],
+                           capture_output=True, timeout=20)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    m = _DSHOW_AUDIO.search(p.stderr.decode("utf-8", "replace"))
+    return m.group(1) if m else None
+
+
 def command(source: str = "default", realtime: bool = True) -> list:
-    """The ffmpeg command line. `source` is a PulseAudio source name, or `file:<path>` to replay a recording
-    (in real time unless `realtime` is false)."""
+    """The ffmpeg command line. `source` is a microphone (see `microphone_input`), or `file:<path>` to replay a
+    recording (in real time unless `realtime` is false)."""
     if source.startswith("file:"):
         inp = ["-re", "-i", source[5:]] if realtime else ["-i", source[5:]]
     else:
-        inp = ["-fflags", "nobuffer", "-f", "pulse", "-i", source or "default"]
+        inp = microphone_input(source)
     return ["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error"] + inp + [
         "-filter_complex", filter_graph(), "-map", "[out]", "-f", "f32le", "-flush_packets", "1", "pipe:1"]
 

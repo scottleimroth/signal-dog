@@ -23,6 +23,14 @@ from test_debug_numbers import load_tool  # noqa: E402
 HAVE_FFMPEG = shutil.which("ffmpeg") is not None
 
 
+def private_dir(path):
+    """Only the owner can read the folder. Windows reports no POSIX mode bits; there mkdtemp makes the folder inside the
+    user's own temporary folder, which only that user can open, so the check is that it is under it."""
+    if os.name == "nt":
+        return os.path.commonpath([os.path.abspath(path), os.path.abspath(tempfile.gettempdir())]) == os.path.abspath(tempfile.gettempdir())
+    return (os.stat(path).st_mode & 0o077) == 0
+
+
 def stamp(ago_s):
     return time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(time.time() - ago_s))
 
@@ -487,7 +495,7 @@ class FakeDemoListener:
 
     def __init__(self, source, on_event, **kw):
         FakeDemoListener.seen = {"source": source, "kw": kw, "existed": os.path.exists(source[5:]),
-                                 "private": (os.stat(os.path.dirname(source[5:])).st_mode & 0o077) == 0}
+                                 "private": private_dir(os.path.dirname(source[5:]))}
         self.on_event, self.state, self.error = on_event, "stopped", ""
 
     def start(self):
@@ -703,7 +711,7 @@ class DemoEndToEndTests(Base):
         real_write = demo.write_demo
 
         def spy(path):
-            made["dir_private"] = (os.stat(os.path.dirname(path)).st_mode & 0o077) == 0
+            made["dir_private"] = private_dir(os.path.dirname(path))
             made["path"] = path
             return real_write(path)
 

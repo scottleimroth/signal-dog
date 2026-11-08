@@ -4,7 +4,9 @@ import shutil
 import tempfile
 import threading
 import time
+import types
 import unittest
+from unittest import mock
 
 import _pkg
 import audio
@@ -52,9 +54,27 @@ class GraphTests(unittest.TestCase):
         self.assertNotIn("record", " ".join(graph.command()))
 
     def test_command_sources(self):
-        self.assertIn("pulse", graph.command("default"))
         self.assertIn("-re", graph.command("file:/x.wav"))
         self.assertNotIn("-re", graph.command("file:/x.wav", realtime=False))
+
+    def test_each_system_opens_its_own_microphone(self):
+        self.assertEqual(graph.microphone_input("default", "Linux"), ["-fflags", "nobuffer", "-f", "pulse", "-i", "default"])
+        self.assertEqual(graph.microphone_input("alsa_input.usb", "Linux")[-1], "alsa_input.usb")
+        self.assertEqual(graph.microphone_input("default", "Darwin"), ["-f", "avfoundation", "-i", ":0"])
+        self.assertEqual(graph.microphone_input("2", "Darwin")[-1], ":2")
+        self.assertEqual(graph.microphone_input("Microphone (USB)", "Windows")[-1], "audio=Microphone (USB)")
+        with mock.patch.object(graph, "default_windows_microphone", return_value="Microphone (Rapoo Camera)"):
+            self.assertEqual(graph.microphone_input("default", "Windows"),
+                             ["-f", "dshow", "-audio_buffer_size", "50", "-i", "audio=Microphone (Rapoo Camera)"])
+
+    def test_the_first_windows_microphone_is_read_from_ffmpegs_device_list(self):
+        listing = "\n".join(['[in#0 @ 0] "Integrated Webcam" (video)', '[in#0 @ 0] "Microphone (Rapoo Camera)" (audio)',
+                             '[in#0 @ 0]   Alternative name "@device_cm_x"', '[in#0 @ 0] "Line In (Realtek)" (audio)'])
+        done = types.SimpleNamespace(stderr=listing.encode("utf-8"))
+        with mock.patch.object(graph.subprocess, "run", return_value=done):
+            self.assertEqual(graph.default_windows_microphone(), "Microphone (Rapoo Camera)")
+        with mock.patch.object(graph.subprocess, "run", side_effect=OSError("no ffmpeg")):
+            self.assertIsNone(graph.default_windows_microphone())
 
 
 class DetectorTests(unittest.TestCase):
