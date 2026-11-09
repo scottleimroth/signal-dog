@@ -76,6 +76,58 @@ class GraphTests(unittest.TestCase):
         with mock.patch.object(graph.subprocess, "run", side_effect=OSError("no ffmpeg")):
             self.assertIsNone(graph.default_windows_microphone())
 
+    # Review of 28bcd0a6: ffmpeg must not receive the agent's whole environment.
+    _SECRETS = {"OPENAI_API_KEY": "sk-test", "ANTHROPIC_API_KEY": "x", "MATRIX_ACCESS_TOKEN": "y",
+                "HERMES_DASHBOARD_SESSION_TOKEN": "z", "GITHUB_TOKEN": "g", "AWS_SECRET_ACCESS_KEY": "a"}
+
+    def test_ffmpeg_environment_keeps_only_what_capture_needs(self):
+        fake = {"PATH": "/usr/bin", "HOME": "/home/u", "LANG": "C.UTF-8", "XDG_RUNTIME_DIR": "/run/user/1000",
+                "PULSE_SERVER": "unix:/run/pulse/native", "PULSE_COOKIE": "/home/u/.pulse-cookie", **self._SECRETS}
+        env = graph.environment(fake)
+        for name in ("PATH", "HOME", "LANG", "XDG_RUNTIME_DIR", "PULSE_SERVER", "PULSE_COOKIE"):
+            self.assertEqual(env[name], fake[name])
+        for name in self._SECRETS:
+            self.assertNotIn(name, env)
+
+    def test_ffmpeg_environment_on_windows_keeps_system_names_in_any_case(self):
+        # os.environ on Windows reports names upper-cased; a mixed-case spelling must be kept too.
+        fake = {"SYSTEMROOT": r"C:\Windows", "TEMP": r"C:\t", "USERPROFILE": r"C:\Users\u", "Path": r"C:\bin",
+                "SystemDrive": "C:", **self._SECRETS}
+        env = graph.environment(fake)
+        for name in ("SYSTEMROOT", "TEMP", "USERPROFILE", "Path"):
+            self.assertEqual(env[name], fake[name])
+        self.assertNotIn("SystemDrive", env)
+        for name in self._SECRETS:
+            self.assertNotIn(name, env)
+
+    def test_both_ffmpeg_launches_get_the_reduced_environment(self):
+        with mock.patch.dict(os.environ, self._SECRETS):
+            done = types.SimpleNamespace(stderr=b"")
+            with mock.patch.object(graph.subprocess, "run", return_value=done) as run:
+                graph.default_windows_microphone()
+            env = run.call_args.kwargs.get("env")
+            self.assertIsNotNone(env, "the -list_devices call must pass env= explicitly")
+            for name in self._SECRETS:
+                self.assertNotIn(name, env)
+            with mock.patch.object(listener.subprocess, "Popen", side_effect=OSError("stop here")) as popen:
+                stream = listener._Stream(owner=types.SimpleNamespace(), source="default", cfg=detect.Config())
+                with self.assertRaises(OSError):
+                    stream.start()
+            env = popen.call_args.kwargs.get("env")
+            self.assertIsNotNone(env, "the listener's ffmpeg must pass env= explicitly")
+            for name in self._SECRETS:
+                self.assertNotIn(name, env)
+
+    def test_log_path_follows_the_active_hermes_profile(self):
+        fake = types.ModuleType("hermes_constants")
+        fake.get_hermes_home = lambda: "/profiles/active"
+        with mock.patch.dict("sys.modules", {"hermes_constants": fake}), \
+                mock.patch.dict(os.environ, {"HERMES_HOME": "/profiles/launcher"}):
+            self.assertEqual(listener.default_log_path(), os.path.join("/profiles/active", "signal-dog", "events.log"))
+        with mock.patch.dict("sys.modules", {"hermes_constants": None}), \
+                mock.patch.dict(os.environ, {"HERMES_HOME": "/profiles/launcher"}):
+            self.assertEqual(listener.default_log_path(), os.path.join("/profiles/launcher", "signal-dog", "events.log"))
+
 
 class DetectorTests(unittest.TestCase):
     def quiet(self, seconds=1.0):

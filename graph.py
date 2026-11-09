@@ -76,7 +76,7 @@ def default_windows_microphone():
     """The first audio capture device DirectShow lists, or None. ffmpeg prints the list on stderr."""
     try:
         p = subprocess.run(["ffmpeg", "-hide_banner", "-list_devices", "true", "-f", "dshow", "-i", "dummy"],
-                           capture_output=True, timeout=20)
+                           capture_output=True, timeout=20, env=environment())
     except (OSError, subprocess.TimeoutExpired):
         return None
     m = _DSHOW_AUDIO.search(p.stderr.decode("utf-8", "replace"))
@@ -94,9 +94,27 @@ def command(source: str = "default", realtime: bool = True) -> list:
         "-filter_complex", filter_graph(), "-map", "[out]", "-f", "f32le", "-flush_packets", "1", "pipe:1"]
 
 
-def environment() -> dict:
-    """The environment for ffmpeg. Under WSL the sound server is a socket that PulseAudio clients do not find alone."""
-    env = dict(os.environ)
+# The only variables ffmpeg is given: what it needs to run, find the sound server and open the microphone.
+# Nothing else from the agent's environment (provider keys, tokens) reaches the child process.
+ENV_KEEP = (
+    # every system
+    "PATH", "HOME", "USER", "LOGNAME", "LANG", "LC_ALL", "LC_CTYPE", "TMPDIR", "LD_LIBRARY_PATH",
+    # PulseAudio / PipeWire on Linux and WSL (server address, cookie under the config dir, X11 property, D-Bus)
+    "XDG_RUNTIME_DIR", "XDG_CONFIG_HOME", "DISPLAY", "XAUTHORITY", "DBUS_SESSION_BUS_ADDRESS",
+    # Windows (DirectShow)
+    "SYSTEMROOT", "WINDIR", "TEMP", "TMP", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "PROGRAMDATA", "COMSPEC",
+    "PATHEXT",
+)
+ENV_KEEP_PREFIXES = ("PULSE_",)
+
+
+def environment(source=None) -> dict:
+    """The environment for ffmpeg: only the names in ENV_KEEP and PULSE_*, matched without regard to case (Windows
+    reports SystemRoot as SYSTEMROOT). Under WSL the sound server is a socket PulseAudio clients do not find alone.
+    `source` defaults to os.environ; tests pass their own mapping."""
+    source = os.environ if source is None else source
+    env = {key: value for key, value in source.items()
+           if key.upper() in ENV_KEEP or key.upper().startswith(ENV_KEEP_PREFIXES)}
     sock = "/mnt/wslg/PulseServer"
     if "PULSE_SERVER" not in env and os.path.exists(sock):
         env["PULSE_SERVER"] = "unix:" + sock

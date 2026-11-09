@@ -68,6 +68,11 @@ For live listening it needs `ffmpeg` and a microphone:
 - **macOS: not yet.** On a test Mac the microphone reached Signal Dog with most of the sound missing, so on a Mac
   `/signaldog on` says so and does nothing. `/signaldog demo` and the agent's tool work there, and the tests pass on macOS.
 
+`ffmpeg` is started with only the environment it needs to run and reach the microphone (the names are in
+`graph.ENV_KEEP`: search path, home, user, locale, temporary folders, the PulseAudio/PipeWire session variables and
+`PULSE_*`, and on Windows the system folders). API keys, tokens and anything else in the agent's environment are not
+passed to it.
+
 Machines with no microphone can run `/signaldog demo`, which needs `ffmpeg` but no microphone. The tests run on
 Linux, macOS and Windows (`.github/workflows/tests.yml`).
 

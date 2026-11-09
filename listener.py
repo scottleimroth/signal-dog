@@ -59,7 +59,14 @@ class NumbersLog:
 
 
 def default_log_path():
-    home = os.environ.get("HERMES_HOME") or os.path.join(os.path.expanduser("~"), ".hermes")
+    """$HERMES_HOME/signal-dog/events.log of the ACTIVE profile. Hermes's get_hermes_home() follows the profile a
+    multi-profile gateway is serving; os.environ only names the profile that launched it. Outside Hermes (tests,
+    tools) the environment variable or ~/.hermes is used."""
+    try:
+        from hermes_constants import get_hermes_home
+        home = str(get_hermes_home())
+    except Exception:
+        home = os.environ.get("HERMES_HOME") or os.path.join(os.path.expanduser("~"), ".hermes")
     return os.path.join(home, "signal-dog", "events.log")
 
 

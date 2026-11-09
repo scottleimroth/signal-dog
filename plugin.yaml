@@ -1,5 +1,5 @@
 name: signal-dog
-version: 0.1.1
+version: 0.1.2
 description: Listens through the microphone for household sounds (a door knock, an
   appliance beeping, a smoke alarm) and sends you a chat message. Off until you turn
   it on with /signaldog on. Needs ffmpeg. Not a certified smoke alarm.
