@@ -153,7 +153,7 @@ After the quiet tail, a new alarm at that pitch can alert again without waiting 
 
 Hermes 0.23's public `post_message` handle supplies `edit`; no private Hermes state is changed.
 Desktop and the Ink TUI replace a keyed notification; the classic CLI prints each update as another line.
-Matrix implements edits, but this new ongoing-alert path has been live-tested only on local chat, not Matrix.
+Matrix implements edits; this ongoing-alert path has been live-tested on Hermes local chat and in an unencrypted room on a throwaway Matrix server, including replacement edits and refused-edit fallback.
 If a route does not support editing, or an edit fails, Hermes may send a new message;
 the same three-minute update interval limits these reminders too. A failed delivery uses the existing missed-alert
 queue. On reconnect, a summary or fresh message may replace the original alert; message edits are not guaranteed.
