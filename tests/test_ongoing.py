@@ -129,6 +129,33 @@ class EditableCtx(Ctx):
         return handle
 
 
+class MovingHandle:
+    """The public Hermes contract: after an edit the handle follows its returned event id."""
+    def __init__(self, ctx, message_id):
+        self.ctx, self.message_id = ctx, message_id
+        self.ok, self.error = True, None
+        self.result = {'ok': True, 'message_id': message_id}
+
+    def edit(self, text):
+        self.ctx.targets.append(self.message_id)
+        self.message_id = '$event%d' % len(self.ctx.targets)
+        fallback = self.ctx.fallback
+        self.result = {'ok': True, 'message_id': self.message_id, 'edited': not fallback}
+        if fallback:
+            self.result['fallback'] = True
+        return self.result
+
+
+class MovingCtx(Ctx):
+    def __init__(self):
+        super().__init__()
+        self.targets, self.fallback = [], False
+
+    def post_message(self, text):
+        self.posted.append(text)
+        return MovingHandle(self, '$original')
+
+
 class DeliveryTests(unittest.TestCase):
     def plugin(self, editable=True):
         ctx = EditableCtx() if editable else Ctx()
@@ -153,6 +180,28 @@ class DeliveryTests(unittest.TestCase):
         self.assertIn('no longer detected', ctx.edited[1])
         self.assertIn('not mean it is safe', ctx.edited[1])
         self.assertEqual(p.alarm_handles, {})
+
+    def test_every_real_edit_targets_the_original_alert_not_the_previous_edit(self):
+        ctx = MovingCtx()
+        p = signal_dog.register(ctx)
+        p.bound, p.pin = route('live'), ('local', '')
+        self.addCleanup(p.shutdown)
+        self.deliver_event(p, dict(beep(), incident='alarm'))
+        self.deliver_event(p, dict(kind='beep_ongoing', hz=3000, elapsed_s=180, incident='alarm'))
+        self.deliver_event(p, dict(kind='beep_stopped', hz=3000, elapsed_s=200, absent_s=15, incident='alarm'))
+        self.assertEqual(ctx.targets, ['$original', '$original'])
+
+    def test_a_fallback_new_send_becomes_the_new_edit_anchor(self):
+        ctx = MovingCtx()
+        p = signal_dog.register(ctx)
+        p.bound, p.pin = route('live'), ('local', '')
+        self.addCleanup(p.shutdown)
+        self.deliver_event(p, dict(beep(), incident='alarm'))
+        ctx.fallback = True
+        self.deliver_event(p, dict(kind='beep_ongoing', hz=3000, elapsed_s=180, incident='alarm'))
+        ctx.fallback = False
+        self.deliver_event(p, dict(kind='beep_stopped', hz=3000, elapsed_s=200, absent_s=15, incident='alarm'))
+        self.assertEqual(ctx.targets, ['$original', '$event1'])
 
     def test_non_editing_handle_falls_back_to_messages(self):
         p, ctx = self.plugin(editable=False)

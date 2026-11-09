@@ -264,11 +264,15 @@ class _Plugin:
             handle = self.alarm_handles.get(key)
             edit = getattr(handle, "edit", None)
             if callable(edit):
+                original_id = getattr(handle, "message_id", None)
                 try:
                     result = edit(text)
                 except Exception:
                     result = {}       # another plugin host may supply a raising handle: use normal delivery
                 if result.get("ok") and result.get("delivered") is not False:
+                    if original_id and result.get("edited") and not result.get("fallback"):
+                        # Matrix returns the replacement event id; later edits still target the original.
+                        handle.message_id = original_id
                     with self.lock:
                         self.sent += 1
                         self.last_ok = time.strftime("%H:%M:%S")
